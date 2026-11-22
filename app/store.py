@@ -1,5 +1,6 @@
 import sqlite3, json
 from pathlib import Path
+from datetime import datetime, timezone
 from app.errors import BusinessError
 
 def connect(path):
@@ -33,4 +34,19 @@ def review(path,run_id,revision):
             if not con.execute('SELECT 1 FROM runs WHERE id=?',(run_id,)).fetchone():
                 raise BusinessError('NOT_FOUND','批次不存在',404)
             raise BusinessError('STALE_VERSION','复核版本已更新，请刷新',409)
+    return get(path,run_id)
+
+def _audit_publish(con,run_id,revision):
+    con.execute("CREATE TABLE IF NOT EXISTS publish_log (run_id TEXT NOT NULL, revision INTEGER NOT NULL, published_at TEXT NOT NULL)")
+    con.execute('INSERT INTO publish_log(run_id,revision,published_at) VALUES(?,?,?)',(run_id,revision,datetime.now(timezone.utc).isoformat()))
+
+def publish(path,run_id,revision):
+    # 单事务发布：审计写入或状态切换任一步中断，整体回滚，旧版结果原样恢复。
+    with connect(path) as con:
+        row=con.execute('SELECT revision FROM runs WHERE id=?',(run_id,)).fetchone()
+        if not row: raise BusinessError('NOT_FOUND','批次不存在',404)
+        if row['revision']!=revision: raise BusinessError('STALE_VERSION','复核版本已更新，请刷新',409)
+        _audit_publish(con,run_id,revision)
+        cur=con.execute("UPDATE runs SET status='已发布',revision=revision+1 WHERE id=? AND revision=?",(run_id,revision))
+        if cur.rowcount!=1: raise BusinessError('STALE_VERSION','复核版本已更新，请刷新',409)
     return get(path,run_id)

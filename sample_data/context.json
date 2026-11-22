@@ -6,9 +6,12 @@
     "auction",
     "correction",
     "reconcile",
+    "subsidy",
     "archive"
   ],
   "market": "东港水产",
   "currency": "CNY",
-  "weight_unit": "kg"
+  "weight_unit": "kg",
+  "subsidy_pool": 600.00,
+  "subsidy_rate": 0.50
 }

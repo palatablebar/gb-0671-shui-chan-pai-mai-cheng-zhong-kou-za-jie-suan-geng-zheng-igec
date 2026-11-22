@@ -25,6 +25,22 @@ def test_persistence_after_new_connection(tmp_path,sample):
 def test_invalid_review_does_not_change(tmp_path,monkeypatch):
     c=client(tmp_path,monkeypatch);s=c.post('/api/runs',json={}).json();rid=s['manifest']['run_id'];assert c.post('/api/runs/'+rid+'/review',json={'revision':0}).status_code==422;assert c.get('/api/runs/'+rid).json()['revision']==1
 
+def test_publish_http_flow(tmp_path,monkeypatch):
+    c=client(tmp_path,monkeypatch)
+    run=c.post('/api/runs',json={}).json();rid=run['manifest']['run_id']
+    url='/api/runs/'+rid+'/publish'
+    assert c.post(url,json={'revision':0}).status_code==422
+    assert c.post(url,json={'revision':1}).status_code==200
+    assert c.post(url,json={'revision':1}).status_code==409
+    final=c.get('/api/runs/'+rid).json()
+    assert final['status']=='已发布' and final['revision']==2
+    assert final['subsidy']['summary']['pool']=='600.00'
+def test_subsidy_page_shows_pool_and_pending(tmp_path,monkeypatch):
+    c=client(tmp_path,monkeypatch)
+    html=c.get('/subsidy').text
+    assert '当日补贴池' in html and '待补票' in html and '更正后调整' in html
+    assert '600.00' in html and '40.90' in html and 'POOL_EXHAUSTED' in html
+
 def test_clean_navigation_run_preserved(tmp_path,monkeypatch):
     c=client(tmp_path,monkeypatch)
     run=c.post('/api/runs',json={'dataset':'clean'}).json()
